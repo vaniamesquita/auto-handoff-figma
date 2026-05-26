@@ -11,13 +11,24 @@ let resolvedFontFamily: string | null = null;
 
 /**
  * Carrega as fontes do plugin com fallback.
- * Ordem: BancoDoBrasil Textos → Inter → Roboto.
- * Idempotente: se já carregou, retorna a família resolvida.
+ * Se preferredFamily for informada, tenta ela primeiro; caso contrário,
+ * usa a ordem padrão: BancoDoBrasil Textos → Inter → Roboto.
+ * Idempotente por sessão: se já carregou sem preferência explícita, retorna cached.
  */
-export async function loadPluginFonts(): Promise<string> {
+export async function loadPluginFonts(preferredFamily?: string): Promise<string> {
+  // Reset cache quando uma preferência explícita é fornecida
+  if (preferredFamily) {
+    resolvedFontFamily = null;
+  }
+
   if (resolvedFontFamily) return resolvedFontFamily;
 
-  for (const family of FONT_CANDIDATES) {
+  // Candidatos: preferida na frente, sem duplicatas
+  const candidates: string[] = preferredFamily
+    ? [preferredFamily, ...["BancoDoBrasil Textos", "Inter", "Roboto"].filter(f => f !== preferredFamily)]
+    : [...FONT_CANDIDATES];
+
+  for (const family of candidates) {
     try {
       for (const style of FONT_STYLES) {
         await figma.loadFontAsync({family, style});
@@ -29,7 +40,7 @@ export async function loadPluginFonts(): Promise<string> {
     }
   }
 
-  // Último recurso: Inter (fontes padrão do Figma)
+  // Último recurso: Inter (fonte padrão do Figma)
   resolvedFontFamily = "Inter";
   try {
     for (const style of FONT_STYLES) {
