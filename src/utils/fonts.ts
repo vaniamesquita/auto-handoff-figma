@@ -17,7 +17,7 @@ let resolvedFontFamily: string | null = null;
  */
 export async function loadPluginFonts(preferredFamily?: string): Promise<string> {
   // Reset cache quando uma preferência explícita é fornecida
-  if (preferredFamily) {
+  if (preferredFamily && preferredFamily !== resolvedFontFamily) {
     resolvedFontFamily = null;
   }
 
@@ -25,7 +25,7 @@ export async function loadPluginFonts(preferredFamily?: string): Promise<string>
 
   // Candidatos: preferida na frente, sem duplicatas
   const candidates: string[] = preferredFamily
-    ? [preferredFamily, ...["BancoDoBrasil Textos", "Inter", "Roboto"].filter(f => f !== preferredFamily)]
+    ? [preferredFamily, ...FONT_CANDIDATES.filter(f => f !== preferredFamily)]
     : [...FONT_CANDIDATES];
 
   for (const family of candidates) {
