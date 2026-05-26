@@ -697,6 +697,23 @@
       box-shadow: 0 0 0 2px var(--accent-light);
     }
 
+    .layout-setting-input select {
+      padding: 6px 8px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      color: var(--text-primary);
+      background: var(--bg-secondary);
+      transition: var(--transition);
+      cursor: pointer;
+      min-width: 120px;
+    }
+
+    .layout-setting-input select:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--accent-light);
+    }
+
     .layout-setting-unit {
       font-size: 10px;
       color: var(--text-tertiary);
@@ -1975,6 +1992,14 @@
           <div class="color-preview" id="bgColorPreview" style="background-color: #F4F5F7;"></div>
         </div>
       </div>
+      <div class="layout-setting">
+        <span class="layout-setting-label">Fonte</span>
+        <div class="layout-setting-input">
+          <select id="fontFamily">
+            <option value="Inter">Inter</option>
+          </select>
+        </div>
+      </div>
     </div>
 
     <!-- Assets Tab REFACTORED -->
@@ -2483,6 +2508,7 @@
         paddingHorizontal: parseInt(document.getElementById('paddingHorizontal').value) || 100,
         sectionSpacingValue: parseInt(document.getElementById('sectionSpacingInput').value) || 48,
         bgColor: document.getElementById('bgColor').value || 'FFFFFF',
+        fontFamily: document.getElementById('fontFamily').value || 'Inter',
         // Visualization mode
         highlightMode: document.getElementById('highlightMode').checked,
         // View modes (table/canvas)
@@ -3334,6 +3360,23 @@
         // Render variant properties if available
         if (msg.variantProperties) {
           renderVariantProperties(msg.variantProperties);
+        }
+        // Popular seletor de fonte com as fontes disponíveis no Figma do usuário
+        if (msg.availableFonts && Array.isArray(msg.availableFonts)) {
+          const fontSelect = document.getElementById('fontFamily');
+          fontSelect.innerHTML = '';
+          const FONT_LABELS = {
+            'Inter': 'Inter',
+            'Roboto': 'Roboto',
+            'BancoDoBrasil Textos': 'Banco do Brasil Textos',
+          };
+          msg.availableFonts.forEach(family => {
+            const option = document.createElement('option');
+            option.value = family;
+            option.textContent = FONT_LABELS[family] || family;
+            if (family === 'Inter') option.selected = true;
+            fontSelect.appendChild(option);
+          });
         }
       }
     };
