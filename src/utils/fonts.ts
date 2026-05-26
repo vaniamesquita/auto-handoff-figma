@@ -1,9 +1,10 @@
 // ========================================================================
 // AUTO HANDOFF GENERATOR - FONT FALLBACK
 // ========================================================================
-// Tenta "BancoDoBrasil Textos"; se não existir no arquivo, usa Inter ou Roboto.
+// Padrão: Inter. Fallback: Roboto. BancoDoBrasil Textos só é usada quando
+// explicitamente selecionada pelo usuário na aba Layout.
 
-const FONT_CANDIDATES = ["BancoDoBrasil Textos", "Inter", "Roboto"] as const;
+const FONT_CANDIDATES = ["Inter", "Roboto"] as const;
 const FONT_STYLES = ["Regular", "Medium", "Bold"] as const;
 export type PluginFontStyle = (typeof FONT_STYLES)[number];
 
@@ -12,7 +13,7 @@ let resolvedFontFamily: string | null = null;
 /**
  * Carrega as fontes do plugin com fallback.
  * Se preferredFamily for informada, tenta ela primeiro; caso contrário,
- * usa a ordem padrão: BancoDoBrasil Textos → Inter → Roboto.
+ * usa a ordem padrão: Inter → Roboto.
  * Idempotente por sessão: se já carregou sem preferência explícita, retorna cached.
  */
 export async function loadPluginFonts(preferredFamily?: string): Promise<string> {

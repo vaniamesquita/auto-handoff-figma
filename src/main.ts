@@ -25,21 +25,19 @@ import {insertAssetIntoFigma, updateMarker} from "./assets/marker-generator";
 
 /**
  * Verifica quais fontes candidatas estão disponíveis no Figma do usuário.
- * Tenta carregar apenas o estilo "Regular" de cada candidata.
- * @returns Lista de famílias disponíveis
+ * Usa listAvailableFontsAsync para não provocar erros no console do Figma.
+ * @returns Lista de famílias disponíveis, sempre incluindo Inter e Roboto
  */
 async function checkAvailableFonts(): Promise<string[]> {
-  const candidates = ["BancoDoBrasil Textos", "Inter", "Roboto"];
-  const available: string[] = [];
-  for (const family of candidates) {
-    try {
-      await figma.loadFontAsync({family, style: "Regular"});
-      available.push(family);
-    } catch {
-      // fonte não disponível neste Figma
-    }
+  const CANDIDATES = ["BancoDoBrasil Textos", "Inter", "Roboto"];
+  try {
+    const allFonts = await figma.listAvailableFontsAsync();
+    const availableFamilies = new Set(allFonts.map((f) => f.fontName.family));
+    return CANDIDATES.filter((family) => availableFamilies.has(family));
+  } catch {
+    // Fallback: Inter e Roboto são sempre disponíveis no Figma
+    return ["Inter", "Roboto"];
   }
-  return available;
 }
 
 // ========================================
