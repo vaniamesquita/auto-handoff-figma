@@ -109,6 +109,8 @@ export interface GenerationOptions {
   paddingHorizontal: number;
   sectionSpacingValue: number;
   bgColor: string;
+  // Font
+  fontFamily?: string;
   // Visualization mode
   highlightMode: boolean;
   // Variant property order for colors table
