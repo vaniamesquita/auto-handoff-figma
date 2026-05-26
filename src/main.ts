@@ -20,6 +20,29 @@ import {
 import {insertAssetIntoFigma, updateMarker} from "./assets/marker-generator";
 
 // ========================================
+// FONT AVAILABILITY CHECK
+// ========================================
+
+/**
+ * Verifica quais fontes candidatas estão disponíveis no Figma do usuário.
+ * Tenta carregar apenas o estilo "Regular" de cada candidata.
+ * @returns Lista de famílias disponíveis
+ */
+async function checkAvailableFonts(): Promise<string[]> {
+  const candidates = ["BancoDoBrasil Textos", "Inter", "Roboto"];
+  const available: string[] = [];
+  for (const family of candidates) {
+    try {
+      await figma.loadFontAsync({family, style: "Regular"});
+      available.push(family);
+    } catch {
+      // fonte não disponível neste Figma
+    }
+  }
+  return available;
+}
+
+// ========================================
 // MAIN INITIALIZATION
 // ========================================
 
@@ -27,6 +50,7 @@ async function main(): Promise<void> {
   figma.showUI(__html__, {width: 380, height: 720});
 
   const selection = figma.currentPage.selection;
+  const availableFonts = await checkAvailableFonts();
 
   const validNodes = selection.filter(
     (node) =>
@@ -41,6 +65,7 @@ async function main(): Promise<void> {
       componentName: "Nenhum componente selecionado",
       variantProperties: [],
       selectionCount: 0,
+      availableFonts,
     });
     return;
   }
@@ -109,6 +134,7 @@ async function main(): Promise<void> {
     hasVariants: mergedVariantProperties.length > 0,
     selectionCount: validNodes.length,
     nodeType: nodeType,
+    availableFonts,
   });
 }
 
@@ -291,7 +317,7 @@ async function generateSpec(options: GenerationOptions): Promise<void> {
     timeout: 50000,
   });
 
-  await loadPluginFonts();
+  await loadPluginFonts(options.fontFamily);
 
   const selection = figma.currentPage.selection;
 
