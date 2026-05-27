@@ -21,12 +21,16 @@
   var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
 
   // src/utils/fonts.ts
-  var FONT_CANDIDATES = ["BancoDoBrasil Textos", "Inter", "Roboto"];
+  var FONT_CANDIDATES = ["Inter", "Roboto"];
   var FONT_STYLES = ["Regular", "Medium", "Bold"];
   var resolvedFontFamily = null;
-  async function loadPluginFonts() {
+  async function loadPluginFonts(preferredFamily) {
+    if (preferredFamily && preferredFamily !== resolvedFontFamily) {
+      resolvedFontFamily = null;
+    }
     if (resolvedFontFamily) return resolvedFontFamily;
-    for (const family of FONT_CANDIDATES) {
+    const candidates = preferredFamily ? [preferredFamily, ...FONT_CANDIDATES.filter((f) => f !== preferredFamily)] : [...FONT_CANDIDATES];
+    for (const family of candidates) {
       try {
         for (const style of FONT_STYLES) {
           await figma.loadFontAsync({ family, style });
@@ -6195,10 +6199,21 @@
   }
 
   // src/main.ts
+  async function checkAvailableFonts() {
+    const CANDIDATES = ["BancoDoBrasil Textos", "Inter", "Roboto"];
+    try {
+      const allFonts = await figma.listAvailableFontsAsync();
+      const availableFamilies = new Set(allFonts.map((f) => f.fontName.family));
+      return CANDIDATES.filter((family) => availableFamilies.has(family));
+    } catch (e) {
+      return ["Inter", "Roboto"];
+    }
+  }
   async function main() {
     var _a, _b;
     figma.showUI(__html__, { width: 380, height: 720 });
     const selection = figma.currentPage.selection;
+    const availableFonts = await checkAvailableFonts();
     const validNodes = selection.filter(
       (node) => node.type === "COMPONENT" || node.type === "COMPONENT_SET" || node.type === "INSTANCE"
     );
@@ -6207,7 +6222,8 @@
         type: "init",
         componentName: "Nenhum componente selecionado",
         variantProperties: [],
-        selectionCount: 0
+        selectionCount: 0,
+        availableFonts
       });
       return;
     }
@@ -6260,7 +6276,8 @@
       variantProperties: mergedVariantProperties,
       hasVariants: mergedVariantProperties.length > 0,
       selectionCount: validNodes.length,
-      nodeType
+      nodeType,
+      availableFonts
     });
   }
   function getSelectedMarkerConfig() {
@@ -6382,13 +6399,48 @@
     divider.fills = [{ type: "SOLID", color: { r: 0.85, g: 0.85, b: 0.85 } }];
     parent.appendChild(divider);
   }
+  async function loadComponentFonts(nodes) {
+    const seen = /* @__PURE__ */ new Set();
+    function collect(node) {
+      if (node.type === "TEXT") {
+        const textNode = node;
+        const fonts = textNode.getRangeFontName(0, textNode.characters.length);
+        const fontList = Array.isArray(fonts) ? fonts : [fonts];
+        for (const font of fontList) {
+          if (font !== figma.mixed) {
+            const key = `${font.family}::${font.style}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+            }
+          }
+        }
+      }
+      if ("children" in node) {
+        for (const child of node.children) {
+          collect(child);
+        }
+      }
+    }
+    for (const node of nodes) {
+      collect(node);
+    }
+    await Promise.all(
+      Array.from(seen).map(async (key) => {
+        const [family, style] = key.split("::");
+        try {
+          await figma.loadFontAsync({ family, style });
+        } catch (e) {
+        }
+      })
+    );
+  }
   async function generateSpec(options) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
     figma.ui.hide();
     const loadingNotification = figma.notify("\u{1F504} Gerando especifica\xE7\xE3o...", {
       timeout: 5e4
     });
-    await loadPluginFonts();
+    await loadPluginFonts(options.fontFamily);
     const selection = figma.currentPage.selection;
     const validNodes = [];
     const componentNames = [];
@@ -6410,6 +6462,7 @@
       figma.ui.show();
       return;
     }
+    await loadComponentFonts(validNodes);
     const allVariantColors = [];
     for (const nodeToProcess of validNodes) {
       const variantColors = await processComponent(nodeToProcess);

@@ -305,6 +305,58 @@ async function addSectionDivider(
 }
 
 // ========================================
+// COMPONENT FONT LOADING
+// ========================================
+
+/**
+ * Scans the component tree for all unique fonts used in TextNodes and loads them.
+ * Required before visualization sections clone/manipulate text nodes from the component.
+ * Failures are silently ignored — the section generator will surface the error if needed.
+ * @param nodes The component nodes to scan
+ */
+async function loadComponentFonts(
+  nodes: (ComponentNode | ComponentSetNode | InstanceNode)[],
+): Promise<void> {
+  const seen = new Set<string>();
+
+  function collect(node: BaseNode): void {
+    if (node.type === "TEXT") {
+      const textNode = node as TextNode;
+      const fonts = textNode.getRangeFontName(0, textNode.characters.length);
+      const fontList = Array.isArray(fonts) ? fonts : [fonts];
+      for (const font of fontList) {
+        if (font !== figma.mixed) {
+          const key = `${font.family}::${font.style}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+          }
+        }
+      }
+    }
+    if ("children" in node) {
+      for (const child of (node as ChildrenMixin).children) {
+        collect(child);
+      }
+    }
+  }
+
+  for (const node of nodes) {
+    collect(node);
+  }
+
+  await Promise.all(
+    Array.from(seen).map(async (key) => {
+      const [family, style] = key.split("::");
+      try {
+        await figma.loadFontAsync({family, style});
+      } catch {
+        // Font not available — section generator will handle the error
+      }
+    }),
+  );
+}
+
+// ========================================
 // SPEC GENERATION
 // ========================================
 
@@ -341,6 +393,10 @@ async function generateSpec(options: GenerationOptions): Promise<void> {
     figma.ui.show();
     return;
   }
+
+  // Load all fonts used within the component (e.g. BancoDoBrasil Textos) so
+  // that visualization sections can safely clone/manipulate those text nodes.
+  await loadComponentFonts(validNodes);
 
   const allVariantColors: VariantColors[] = [];
   for (const nodeToProcess of validNodes) {
