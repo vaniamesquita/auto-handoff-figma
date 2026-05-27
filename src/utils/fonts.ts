@@ -10,8 +10,14 @@ export type PluginFontStyle = (typeof FONT_STYLES)[number];
 
 let resolvedFontFamily: string | null = null;
 
-// Famílias que não puderam ser carregadas na última geração de spec.
-// Populadas por loadComponentFonts (main.ts) antes dos geradores de seção.
+// Conjunto completo de famílias de fonte disponíveis neste Figma.
+// Populado por setAvailableFontFamilies (chamado em loadComponentFonts).
+// Quando null, substituteUnavailableFontsInNode faz a varredura igualmente
+// — nesse caso usa a lista negativa _unavailableFamilies como fallback.
+let _availableFontFamilies: Set<string> | null = null;
+
+// Mantido para compatibilidade com o fluxo de scan de componentes.
+// Usado apenas quando _availableFontFamilies ainda não foi inicializado.
 let _unavailableFamilies: Set<string> = new Set();
 
 /**
@@ -80,8 +86,18 @@ export function getFont(
 // ========================================
 
 /**
- * Registra quais famílias de fonte não estão disponíveis neste Figma.
- * Chamado por loadComponentFonts em main.ts antes dos geradores de seção.
+ * Registra o conjunto completo de famílias disponíveis neste Figma
+ * (output de figma.listAvailableFontsAsync). Usado por
+ * substituteUnavailableFontsInNode para detectar fontes ausentes
+ * sem depender de uma varredura prévia do componente.
+ */
+export function setAvailableFontFamilies(families: Set<string>): void {
+  _availableFontFamilies = families;
+}
+
+/**
+ * @deprecated Use setAvailableFontFamilies para abordagem mais robusta.
+ * Mantido para compatibilidade com chamadas existentes em main.ts.
  */
 export function setUnavailableFontFamilies(families: Set<string>): void {
   _unavailableFamilies = families;
@@ -98,17 +114,28 @@ function mapToPluginStyle(style: string): PluginFontStyle {
 }
 
 /**
+ * Verifica se uma família de fonte está disponível neste Figma.
+ * Usa _availableFontFamilies quando disponível (positivo e completo),
+ * caso contrário cai no _unavailableFamilies (negativo, pode ser incompleto).
+ */
+function isFamilyAvailable(family: string): boolean {
+  if (_availableFontFamilies !== null) {
+    return _availableFontFamilies.has(family);
+  }
+  // Fallback: a família é considerada disponível a menos que tenha falhado
+  return !_unavailableFamilies.has(family);
+}
+
+/**
  * Percorre a árvore de um nó (tipicamente uma InstanceNode recém-criada) e
  * substitui o fontName de todo TextNode cuja família não está disponível neste
  * Figma pelo font resolvido do plugin. Deve ser chamado após createInstance()
  * e antes de appendChild() para evitar erros de "unloaded font".
  *
- * Operação síncrona — depende apenas do estado já populado por
- * setUnavailableFontFamilies() e de loadPluginFonts() já ter sido awaited.
+ * Não depende de varredura prévia do componente — usa o catálogo completo de
+ * fontes disponíveis obtido por setAvailableFontFamilies().
  */
 export function substituteUnavailableFontsInNode(root: SceneNode): void {
-  if (_unavailableFamilies.size === 0) return;
-
   function walk(node: BaseNode): void {
     if (node.type === "TEXT") {
       const textNode = node as TextNode;
@@ -117,7 +144,7 @@ export function substituteUnavailableFontsInNode(root: SceneNode): void {
       if (fn === figma.mixed) {
         // Fontes mistas: substitui o nó inteiro pelo plugin font Regular
         textNode.fontName = getFont("Regular") as FontName;
-      } else if (_unavailableFamilies.has(fn.family)) {
+      } else if (!isFamilyAvailable(fn.family)) {
         textNode.fontName = getFont(mapToPluginStyle(fn.style)) as FontName;
       }
     }

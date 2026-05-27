@@ -4,7 +4,7 @@ import type {
   VariantProperty,
   MarkerConfig,
 } from "./types";
-import {loadPluginFonts, getFont, setUnavailableFontFamilies} from "./utils/fonts";
+import {loadPluginFonts, getFont, setAvailableFontFamilies, setUnavailableFontFamilies} from "./utils/fonts";
 import {processComponent} from "./core/traversal";
 import {
   createColorSectionCombined,
@@ -363,6 +363,11 @@ async function loadComponentFonts(
     availableFamilies = new Set(["Inter", "Roboto"]);
   }
 
+  // Store the full available-font catalog so substituteUnavailableFontsInNode
+  // can detect missing fonts without relying on the component tree scan below.
+  // This is the primary availability check — robust regardless of component structure.
+  setAvailableFontFamilies(availableFamilies);
+
   const unavailable = new Set<string>();
 
   await Promise.all(
@@ -381,7 +386,7 @@ async function loadComponentFonts(
     }),
   );
 
-  // Store unavailable families so visualization code can substitute them
+  // Also store unavailable families (legacy path, kept as secondary signal)
   setUnavailableFontFamilies(unavailable);
 }
 
