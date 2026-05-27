@@ -3294,6 +3294,7 @@
     }
     if (!baseComponent) return;
     const instance = baseComponent.type === "INSTANCE" ? baseComponent.clone() : baseComponent.createInstance();
+    substituteUnavailableFontsInNode(instance);
     const vizContainer = figma.createFrame();
     vizContainer.name = "Visualiza\xE7\xE3o Paddings e Gaps";
     vizContainer.layoutMode = "VERTICAL";
@@ -3361,6 +3362,7 @@
     }
     if (!baseComponent) return;
     const instance = baseComponent.type === "INSTANCE" ? baseComponent.clone() : baseComponent.createInstance();
+    substituteUnavailableFontsInNode(instance);
     const vizContainer = figma.createFrame();
     vizContainer.name = "Visualiza\xE7\xE3o Dimens\xF5es e Bordas";
     vizContainer.layoutMode = "VERTICAL";
@@ -4375,6 +4377,7 @@
       if (foundComponent) {
         try {
           const instance = foundComponent.createInstance();
+          substituteUnavailableFontsInNode(instance);
           const maxSize = 180;
           if (instance.width > maxSize || instance.height > maxSize) {
             const scale = Math.min(
@@ -4530,6 +4533,7 @@
       vizFrame.cornerRadius = 8;
       vizFrame.clipsContent = false;
       const instance = foundVariant.createInstance();
+      substituteUnavailableFontsInNode(instance);
       const maxSize = 300;
       let scale = 1;
       if (instance.width > maxSize || instance.height > maxSize) {
@@ -4680,6 +4684,7 @@
       tempLabel.characters = `01. ${variant.name}`;
       tempCard.appendChild(tempLabel);
       const tempInstance = variant.node.createInstance();
+      substituteUnavailableFontsInNode(tempInstance);
       tempCard.appendChild(tempInstance);
       const calculatedHeight = tempCard.height;
       if (calculatedHeight > maxCardHeight) {
@@ -4727,6 +4732,7 @@
         label.fills = [{ type: "SOLID", color: labelColor }];
         card.appendChild(label);
         const instance = variant.node.createInstance();
+        substituteUnavailableFontsInNode(instance);
         card.appendChild(instance);
         row.appendChild(card);
       }
@@ -5254,6 +5260,7 @@
     const booleanLayers = findBooleanBoundLayers(variant, booleanKeys, []);
     if (booleanLayers.length === 0) return false;
     const tempInstance = variant.createInstance();
+    substituteUnavailableFontsInNode(tempInstance);
     const MARGIN = 120;
     const vizHeight = Math.max(300, tempInstance.height + MARGIN * 2);
     const vizWrapper = figma.createFrame();

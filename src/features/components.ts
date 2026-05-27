@@ -1,5 +1,5 @@
 import { VariantColors } from "../types";
-import { getFont } from "../utils/fonts";
+import { getFont, substituteUnavailableFontsInNode } from "../utils/fonts";
 import { createSectionTitle } from "../ui/table-builder";
 import { createSectionContainer } from "./common";
 import { createSimpleAnnotation } from "../ui/annotations";
@@ -91,6 +91,7 @@ export async function createUsedComponentsSectionAutoLayout(
     if (foundComponent) {
       try {
         const instance = foundComponent.createInstance();
+        substituteUnavailableFontsInNode(instance);
         const maxSize = 180;
 
         if (instance.width > maxSize || instance.height > maxSize) {
@@ -298,6 +299,7 @@ async function createComponentAnatomyVisualization(
     vizFrame.clipsContent = false;
 
     const instance = foundVariant.createInstance();
+    substituteUnavailableFontsInNode(instance);
 
     const maxSize = 300;
     let scale = 1;

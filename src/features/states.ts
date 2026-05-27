@@ -1,5 +1,5 @@
 import { VariantColors } from "../types";
-import { getFont } from "../utils/fonts";
+import { getFont, substituteUnavailableFontsInNode } from "../utils/fonts";
 import { createSectionTitle } from "../ui/table-builder";
 import { createSectionContainer, filterVariantsForVisualization } from "./common";
 
@@ -113,6 +113,7 @@ export async function createEstadosSection(
     tempCard.appendChild(tempLabel);
 
     const tempInstance = variant.node.createInstance();
+    substituteUnavailableFontsInNode(tempInstance);
     tempCard.appendChild(tempInstance);
 
     const calculatedHeight = tempCard.height;
@@ -172,6 +173,7 @@ export async function createEstadosSection(
       card.appendChild(label);
 
       const instance = variant.node.createInstance();
+      substituteUnavailableFontsInNode(instance);
       card.appendChild(instance);
 
       row.appendChild(card);

@@ -1,5 +1,5 @@
 import { VariantColors, AnnotationTracker } from "../types";
-import { getFont } from "../utils/fonts";
+import { getFont, substituteUnavailableFontsInNode } from "../utils/fonts";
 import { formatSpaceToken } from "../utils/helpers";
 import { createTableBuilder, createSectionTitle } from "../ui/table-builder";
 import { annotateGapNew, annotatePaddingNew, annotateRadiusNew, annotateBorderNew, annotateDimensionNewSmart, createAnnotationTracker } from "../ui/annotations";
@@ -369,6 +369,7 @@ async function createPaddingGapVisualizationInSection(
     baseComponent.type === "INSTANCE"
       ? (baseComponent.clone() as InstanceNode)
       : baseComponent.createInstance();
+  substituteUnavailableFontsInNode(instance);
 
   const vizContainer = figma.createFrame();
   vizContainer.name = "Visualização Paddings e Gaps";
@@ -459,6 +460,7 @@ async function createDimensionVisualizationInSection(
     baseComponent.type === "INSTANCE"
       ? (baseComponent.clone() as InstanceNode)
       : baseComponent.createInstance();
+  substituteUnavailableFontsInNode(instance);
 
   const vizContainer = figma.createFrame();
   vizContainer.name = "Visualização Dimensões e Bordas";

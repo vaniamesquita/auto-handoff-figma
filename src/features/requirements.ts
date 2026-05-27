@@ -4,7 +4,7 @@
 
 import {createSectionContainer, filterVariantsForVisualization} from "./common";
 import {createSimpleAnnotation, findFreeYPosition} from "../ui/annotations";
-import {getFont} from "../utils/fonts";
+import {getFont, substituteUnavailableFontsInNode} from "../utils/fonts";
 import {VariantColors} from "../types";
 import {isStructuralName} from "../core/node-helpers";
 
@@ -125,6 +125,7 @@ async function createVariantRequirementsViz(
   if (booleanLayers.length === 0) return false;
 
   const tempInstance = variant.createInstance();
+  substituteUnavailableFontsInNode(tempInstance);
 
   const MARGIN = 120;
   const vizHeight = Math.max(300, tempInstance.height + MARGIN * 2);
