@@ -1,6 +1,6 @@
 import { VariantColors } from "../types";
 import { SIZE_ORDER } from "../config/theme";
-import { getFont } from "../utils/fonts";
+import { getFont, substituteUnavailableFontsInNode } from "../utils/fonts";
 
 // Interfaces locais para grids
 export interface VariantGridConfig {
@@ -275,6 +275,9 @@ async function createTitledVariantFrame(
   vizFrame.clipsContent = false;
 
   const instance = variant.createInstance();
+  // Replace any fonts not available on this machine (e.g. BancoDoBrasil Textos)
+  // with the plugin font before appending — prevents "unloaded font" errors.
+  substituteUnavailableFontsInNode(instance);
   instance.x = frameWidth / 2 - instance.width / 2;
   instance.y = frameHeight / 2 - instance.height / 2;
   vizFrame.appendChild(instance);

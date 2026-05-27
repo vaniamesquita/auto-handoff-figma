@@ -4,7 +4,7 @@ import type {
   VariantProperty,
   MarkerConfig,
 } from "./types";
-import {loadPluginFonts, getFont} from "./utils/fonts";
+import {loadPluginFonts, getFont, setUnavailableFontFamilies} from "./utils/fonts";
 import {processComponent} from "./core/traversal";
 import {
   createColorSectionCombined,
@@ -309,26 +309,35 @@ async function addSectionDivider(
 // ========================================
 
 /**
- * Scans the component tree for all unique fonts used in TextNodes and loads them.
- * Required before visualization sections clone/manipulate text nodes from the component.
- * Failures are silently ignored — the section generator will surface the error if needed.
+ * Scans the component tree for all unique fonts used in TextNodes, loads the
+ * ones that are available, and registers unavailable families via
+ * setUnavailableFontFamilies so that substituteUnavailableFontsInNode can
+ * replace them inside visualization instances before appendChild.
+ *
+ * Uses figma.listAvailableFontsAsync for availability checks to avoid console
+ * errors that figma.loadFontAsync produces for missing fonts.
+ *
  * @param nodes The component nodes to scan
  */
 async function loadComponentFonts(
   nodes: (ComponentNode | ComponentSetNode | InstanceNode)[],
 ): Promise<void> {
-  const seen = new Set<string>();
+  const seen = new Set<string>(); // "family::style"
 
   function collect(node: BaseNode): void {
     if (node.type === "TEXT") {
       const textNode = node as TextNode;
-      const fonts = textNode.getRangeFontName(0, textNode.characters.length);
-      const fontList = Array.isArray(fonts) ? fonts : [fonts];
-      for (const font of fontList) {
-        if (font !== figma.mixed) {
-          const key = `${font.family}::${font.style}`;
-          if (!seen.has(key)) {
-            seen.add(key);
+      const len = textNode.characters.length;
+      if (!len) return;
+      const fn = textNode.fontName;
+      if (fn !== figma.mixed) {
+        seen.add(`${fn.family}::${fn.style}`);
+      } else {
+        // Mixed fonts: scan character by character to collect all families
+        for (let i = 0; i < len; i++) {
+          const f = textNode.getRangeFontName(i, i + 1);
+          if (f !== figma.mixed) {
+            seen.add(`${f.family}::${f.style}`);
           }
         }
       }
@@ -344,16 +353,36 @@ async function loadComponentFonts(
     collect(node);
   }
 
+  // listAvailableFontsAsync lets us check availability without calling
+  // loadFontAsync for missing fonts (which logs errors to the Figma console)
+  let availableFamilies: Set<string>;
+  try {
+    const allFonts = await figma.listAvailableFontsAsync();
+    availableFamilies = new Set(allFonts.map((f) => f.fontName.family));
+  } catch {
+    availableFamilies = new Set(["Inter", "Roboto"]);
+  }
+
+  const unavailable = new Set<string>();
+
   await Promise.all(
     Array.from(seen).map(async (key) => {
       const [family, style] = key.split("::");
+      if (!availableFamilies.has(family)) {
+        // Font not installed — skip loadFontAsync to avoid console errors
+        unavailable.add(family);
+        return;
+      }
       try {
         await figma.loadFontAsync({family, style});
       } catch {
-        // Font not available — section generator will handle the error
+        unavailable.add(family);
       }
     }),
   );
+
+  // Store unavailable families so visualization code can substitute them
+  setUnavailableFontFamilies(unavailable);
 }
 
 // ========================================

@@ -24,6 +24,7 @@
   var FONT_CANDIDATES = ["Inter", "Roboto"];
   var FONT_STYLES = ["Regular", "Medium", "Bold"];
   var resolvedFontFamily = null;
+  var _unavailableFamilies = /* @__PURE__ */ new Set();
   async function loadPluginFonts(preferredFamily) {
     if (preferredFamily && preferredFamily !== resolvedFontFamily) {
       resolvedFontFamily = null;
@@ -54,6 +55,36 @@
   }
   function getFont(style) {
     return { family: getResolvedFontFamily(), style };
+  }
+  function setUnavailableFontFamilies(families) {
+    _unavailableFamilies = families;
+  }
+  function mapToPluginStyle(style) {
+    const s = style.toLowerCase();
+    if (s.includes("bold") || /[789]00/.test(s)) return "Bold";
+    if (s.includes("medium") || s.includes("semi") || /[56]00/.test(s)) return "Medium";
+    return "Regular";
+  }
+  function substituteUnavailableFontsInNode(root) {
+    if (_unavailableFamilies.size === 0) return;
+    function walk(node) {
+      if (node.type === "TEXT") {
+        const textNode = node;
+        if (!textNode.characters.length) return;
+        const fn = textNode.fontName;
+        if (fn === figma.mixed) {
+          textNode.fontName = getFont("Regular");
+        } else if (_unavailableFamilies.has(fn.family)) {
+          textNode.fontName = getFont(mapToPluginStyle(fn.style));
+        }
+      }
+      if ("children" in node) {
+        for (const child of node.children) {
+          walk(child);
+        }
+      }
+    }
+    walk(root);
   }
 
   // src/config/constants.ts
@@ -1087,6 +1118,7 @@
     vizFrame.cornerRadius = 8;
     vizFrame.clipsContent = false;
     const instance = variant.createInstance();
+    substituteUnavailableFontsInNode(instance);
     instance.x = frameWidth / 2 - instance.width / 2;
     instance.y = frameHeight / 2 - instance.height / 2;
     vizFrame.appendChild(instance);
@@ -6404,13 +6436,16 @@
     function collect(node) {
       if (node.type === "TEXT") {
         const textNode = node;
-        const fonts = textNode.getRangeFontName(0, textNode.characters.length);
-        const fontList = Array.isArray(fonts) ? fonts : [fonts];
-        for (const font of fontList) {
-          if (font !== figma.mixed) {
-            const key = `${font.family}::${font.style}`;
-            if (!seen.has(key)) {
-              seen.add(key);
+        const len = textNode.characters.length;
+        if (!len) return;
+        const fn = textNode.fontName;
+        if (fn !== figma.mixed) {
+          seen.add(`${fn.family}::${fn.style}`);
+        } else {
+          for (let i = 0; i < len; i++) {
+            const f = textNode.getRangeFontName(i, i + 1);
+            if (f !== figma.mixed) {
+              seen.add(`${f.family}::${f.style}`);
             }
           }
         }
@@ -6424,15 +6459,29 @@
     for (const node of nodes) {
       collect(node);
     }
+    let availableFamilies;
+    try {
+      const allFonts = await figma.listAvailableFontsAsync();
+      availableFamilies = new Set(allFonts.map((f) => f.fontName.family));
+    } catch (e) {
+      availableFamilies = /* @__PURE__ */ new Set(["Inter", "Roboto"]);
+    }
+    const unavailable = /* @__PURE__ */ new Set();
     await Promise.all(
       Array.from(seen).map(async (key) => {
         const [family, style] = key.split("::");
+        if (!availableFamilies.has(family)) {
+          unavailable.add(family);
+          return;
+        }
         try {
           await figma.loadFontAsync({ family, style });
         } catch (e) {
+          unavailable.add(family);
         }
       })
     );
+    setUnavailableFontFamilies(unavailable);
   }
   async function generateSpec(options) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
