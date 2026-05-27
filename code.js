@@ -2495,6 +2495,24 @@
     rowElements.push(componentText);
     groupElementsAndAppend(rowElements, `Row ${sizeElement}`, container);
   }
+  function buildOriginalFontMap(root) {
+    const map = /* @__PURE__ */ new Map();
+    function walk(node) {
+      if (node.type === "TEXT") {
+        const fn = node.fontName;
+        if (fn !== figma.mixed) {
+          map.set(node.name, fn);
+        }
+      }
+      if ("children" in node) {
+        for (const child of node.children) {
+          walk(child);
+        }
+      }
+    }
+    walk(root);
+    return map;
+  }
   async function createTextVisualizationInSection(parent, component, variantColors, tableWidth, highlightMode, vizPropertyFilters, framesPerRow) {
     var _a;
     const hasText = variantColors.some((v) => v.textStyles.length > 0);
@@ -2523,7 +2541,9 @@
       baseComponent = component;
     }
     if (!baseComponent) return;
+    const originalFontMapSingle = buildOriginalFontMap(baseComponent);
     const instance = baseComponent.type === "INSTANCE" ? baseComponent.clone() : baseComponent.createInstance();
+    substituteUnavailableFontsInNode(instance);
     const MARGIN = 100;
     const frameHeight = Math.max(300, instance.height + MARGIN * 2);
     const vizContainer = figma.createFrame();
@@ -2557,7 +2577,8 @@
       const seenFonts = /* @__PURE__ */ new Set();
       const uniqueTextNodes = [];
       for (const node of allTextNodes) {
-        const fontName = node.fontName !== figma.mixed ? node.fontName : { family: "Mixed", style: "Mixed" };
+        const origFont = originalFontMapSingle.get(node.name);
+        const fontName = origFont != null ? origFont : node.fontName !== figma.mixed ? node.fontName : { family: "Mixed", style: "Mixed" };
         const fontSize = node.fontSize !== figma.mixed ? node.fontSize : 0;
         const fontKey = `${fontName.family}/${fontName.style}/${fontSize}`;
         if (!seenFonts.has(fontKey)) {
@@ -2574,7 +2595,8 @@
         const textRelY = textBounds.y - instanceBounds.y;
         const nodeW = textBounds.width;
         const nodeH = textBounds.height;
-        const textNodeFontName = textNode.fontName !== figma.mixed ? textNode.fontName : { family: "Mixed", style: "Mixed" };
+        const origFont = originalFontMapSingle.get(textNode.name);
+        const textNodeFontName = origFont != null ? origFont : textNode.fontName !== figma.mixed ? textNode.fontName : { family: "Mixed", style: "Mixed" };
         const textNodeFontSize = textNode.fontSize !== figma.mixed ? textNode.fontSize : 0;
         let label = "";
         for (const spec of textStyles) {
@@ -2640,12 +2662,14 @@
       },
       async (ctx) => {
         if (ctx.vc.textStyles.length === 0) return;
+        const originalFontMap = buildOriginalFontMap(ctx.variant);
         const allTextNodes = await findTextNodes(ctx.instance);
         const color = getTheme(ctx.highlightMode).text;
         const seenFonts = /* @__PURE__ */ new Set();
         const uniqueTextNodes = [];
         for (const node of allTextNodes) {
-          const fontName = node.fontName !== figma.mixed ? node.fontName : { family: "Mixed", style: "Mixed" };
+          const origFont = originalFontMap.get(node.name);
+          const fontName = origFont != null ? origFont : node.fontName !== figma.mixed ? node.fontName : { family: "Mixed", style: "Mixed" };
           const fontSize = node.fontSize !== figma.mixed ? node.fontSize : 0;
           const fontKey = `${fontName.family}/${fontName.style}/${fontSize}`;
           if (!seenFonts.has(fontKey)) {
@@ -2662,7 +2686,8 @@
           const textRelY = textBounds.y - ctx.instanceBounds.y;
           const nodeW = textBounds.width;
           const nodeH = textBounds.height;
-          const textNodeFontName = textNode.fontName !== figma.mixed ? textNode.fontName : { family: "Mixed", style: "Mixed" };
+          const origFont = originalFontMap.get(textNode.name);
+          const textNodeFontName = origFont != null ? origFont : textNode.fontName !== figma.mixed ? textNode.fontName : { family: "Mixed", style: "Mixed" };
           const textNodeFontSize = textNode.fontSize !== figma.mixed ? textNode.fontSize : 0;
           let label = "";
           for (const spec of ctx.vc.textStyles) {

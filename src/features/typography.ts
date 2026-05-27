@@ -1,6 +1,6 @@
 import { VariantColors, TextSpec, TextNodeWithMaxLines } from "../types";
 import { SIZE_ORDER, getTheme } from "../config/theme";
-import { getFont } from "../utils/fonts";
+import { getFont, substituteUnavailableFontsInNode } from "../utils/fonts";
 import { findTextNodes } from "../core/node-helpers";
 import { createTableAutoLayoutContainer, createSectionTitle, groupElementsAndAppend } from "../ui/table-builder";
 import { createSimpleAnnotation, createAnnotationTracker, findFreeXPosition } from "../ui/annotations";
@@ -305,6 +305,31 @@ async function createTextTableRow(
   groupElementsAndAppend(rowElements, `Row ${sizeElement}`, container);
 }
 
+/**
+ * Builds a map of textNode.name → original FontName by walking the given node tree.
+ * Used to recover the original font family/style for annotation labels after
+ * substituteUnavailableFontsInNode has replaced missing fonts in the instance copy.
+ * When multiple nodes share a name the last one wins (acceptable for annotation purposes).
+ */
+function buildOriginalFontMap(root: BaseNode): Map<string, FontName> {
+  const map = new Map<string, FontName>();
+  function walk(node: BaseNode): void {
+    if (node.type === "TEXT") {
+      const fn = (node as TextNode).fontName;
+      if (fn !== figma.mixed) {
+        map.set(node.name, fn as FontName);
+      }
+    }
+    if ("children" in node) {
+      for (const child of (node as ChildrenMixin).children) {
+        walk(child);
+      }
+    }
+  }
+  walk(root);
+  return map;
+}
+
 async function createTextVisualizationInSection(
   parent: FrameNode,
   component: ComponentNode | ComponentSetNode | InstanceNode,
@@ -344,10 +369,17 @@ async function createTextVisualizationInSection(
   }
   if (!baseComponent) return;
 
+  // Build original font map from the source component BEFORE any substitution
+  const originalFontMapSingle = buildOriginalFontMap(baseComponent);
+
   const instance =
     baseComponent.type === "INSTANCE"
       ? (baseComponent.clone() as InstanceNode)
       : baseComponent.createInstance();
+
+  // Replace fonts not available on this machine before appendChild to prevent
+  // "unloaded font" errors when rendering proprietary fonts (e.g. BancoDoBrasil Textos)
+  substituteUnavailableFontsInNode(instance);
 
   const MARGIN = 100;
   const frameHeight = Math.max(300, instance.height + MARGIN * 2);
@@ -388,11 +420,12 @@ async function createTextVisualizationInSection(
     const textStyles = variantColors[0]?.textStyles || [];
     const color = getTheme(highlightMode).text;
 
-    // Deduplicar por fonte (família+peso+tamanho) — cada token único gera uma anotação
+    // Deduplicar pela fonte ORIGINAL (não substituída) + tamanho
     const seenFonts = new Set<string>();
     const uniqueTextNodes: TextNode[] = [];
     for (const node of allTextNodes) {
-      const fontName = node.fontName !== figma.mixed ? node.fontName : {family: "Mixed", style: "Mixed"};
+      const origFont = originalFontMapSingle.get(node.name);
+      const fontName = origFont ?? (node.fontName !== figma.mixed ? node.fontName : {family: "Mixed", style: "Mixed"});
       const fontSize = node.fontSize !== figma.mixed ? node.fontSize : 0;
       const fontKey = `${fontName.family}/${fontName.style}/${fontSize}`;
       if (!seenFonts.has(fontKey)) {
@@ -412,15 +445,19 @@ async function createTextVisualizationInSection(
       const textRelY = textBounds.y - instanceBounds.y;
       const nodeW = textBounds.width;
       const nodeH = textBounds.height;
-      const textNodeFontName =
+
+      // Use the original font (pre-substitution) for matching and label display
+      const origFont = originalFontMapSingle.get(textNode.name);
+      const textNodeFontName = origFont ?? (
         textNode.fontName !== figma.mixed
           ? textNode.fontName
-          : {family: "Mixed", style: "Mixed"};
+          : {family: "Mixed", style: "Mixed"}
+      );
       const textNodeFontSize =
         textNode.fontSize !== figma.mixed ? textNode.fontSize : 0;
 
       let label = "";
-      // Match por fonte — mais confiável para subcomponentes aninhados
+      // Match por fonte original — mais confiável para subcomponentes aninhados
       for (const spec of textStyles) {
         if (
           spec.fontFamily === textNodeFontName.family &&
@@ -515,14 +552,19 @@ async function createMultiVariantTextGrid(
     async (ctx) => {
       if (ctx.vc.textStyles.length === 0) return;
 
+      // Build original font map from the unmutated variant ComponentNode
+      // (instance may have had fonts substituted by substituteUnavailableFontsInNode)
+      const originalFontMap = buildOriginalFontMap(ctx.variant);
+
       const allTextNodes = await findTextNodes(ctx.instance);
       const color = getTheme(ctx.highlightMode).text;
 
-      // Deduplicar por fonte (família+peso+tamanho) — cada token único gera uma anotação
+      // Deduplicar pela fonte ORIGINAL + tamanho para preservar distinção entre estilos
       const seenFonts = new Set<string>();
       const uniqueTextNodes: TextNode[] = [];
       for (const node of allTextNodes) {
-        const fontName = node.fontName !== figma.mixed ? node.fontName : {family: "Mixed", style: "Mixed"};
+        const origFont = originalFontMap.get(node.name);
+        const fontName = origFont ?? (node.fontName !== figma.mixed ? node.fontName : {family: "Mixed", style: "Mixed"});
         const fontSize = node.fontSize !== figma.mixed ? node.fontSize : 0;
         const fontKey = `${fontName.family}/${fontName.style}/${fontSize}`;
         if (!seenFonts.has(fontKey)) {
@@ -543,15 +585,18 @@ async function createMultiVariantTextGrid(
         const nodeW = textBounds.width;
         const nodeH = textBounds.height;
 
-        const textNodeFontName =
+        // Use original font for matching and label — instance may have substituted fonts
+        const origFont = originalFontMap.get(textNode.name);
+        const textNodeFontName = origFont ?? (
           textNode.fontName !== figma.mixed
             ? textNode.fontName
-            : {family: "Mixed", style: "Mixed"};
+            : {family: "Mixed", style: "Mixed"}
+        );
         const textNodeFontSize =
           textNode.fontSize !== figma.mixed ? textNode.fontSize : 0;
         let label = "";
 
-        // Match por fonte (família + peso + tamanho) — mais confiável para subcomponentes
+        // Match por fonte original (família + peso + tamanho)
         for (const spec of ctx.vc.textStyles) {
           if (
             spec.fontFamily === textNodeFontName.family &&
